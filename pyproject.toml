@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,8 @@ name = "tg-antispam-bot"
 version = "0.1.0"
 description = "Customizable Telegram anti-spam bot"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "aiogram>=3.31,<4",
@@ -23,6 +25,9 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.1,<2.2",
     "sqlcipher3-binary>=0.5.4",
 ]
+
+[project.urls]
+Source = "https://github.com/PromiseFru/tg-antispam-bot"
 
 [project.optional-dependencies]
 dev = [
