@@ -34,7 +34,7 @@ journalctl --user -u tg-antispam-bot -f
 In system mode, use `sudo` and drop `--user`.
 
 > [!TIP]
-> Run the installer again to upgrade or add a group.
+> Run the installer again to upgrade or add a group. It keeps your `.env` and `rules.yaml`, so compare yours with the [shipped rules](src/tg_antispam_bot/rules.yaml) after upgrading.
 
 > [!NOTE]
 > User services stop at logout. The installer enables lingering; if it can't, run `loginctl enable-linger $USER`.
@@ -159,7 +159,7 @@ defaults:
   escalation: {enabled: true, window: 10m, restrict_after: 2, ban_after: 3}
   raid_mode: {auto: true, duration: 30m, restrict_duration: 1h}
   detectors:
-    mention_pattern: {weight: 60, patterns: ["^dhm_"]}
+    mention_pattern: {weight: 60, patterns: ["bot$"]}
 
 chats:
   "-1001234567890":
@@ -206,6 +206,32 @@ loginctl enable-linger $USER
 
 > [!TIP]
 > System mode uses the same steps with the paths above, a `tg-antispam-bot` system user, and the hardened unit.
+
+## Uninstall
+
+> [!WARNING]
+> This deletes the database. Back it up with `DB_ENCRYPTION_KEY` first if you might reinstall.
+
+User mode:
+
+```sh
+systemctl --user disable --now tg-antispam-bot
+rm ~/.config/systemd/user/tg-antispam-bot.service
+systemctl --user daemon-reload
+rm -rf ~/.local/share/tg-antispam-bot ~/.config/tg-antispam-bot
+```
+
+System mode:
+
+```sh
+sudo systemctl disable --now tg-antispam-bot
+sudo rm /etc/systemd/system/tg-antispam-bot.service
+sudo systemctl daemon-reload
+sudo rm -rf /opt/tg-antispam-bot /etc/tg-antispam-bot /var/lib/tg-antispam-bot
+sudo userdel tg-antispam-bot
+```
+
+Run `loginctl disable-linger` too if nothing else of yours needs to run after logout.
 
 ## Development
 

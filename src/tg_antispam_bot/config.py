@@ -190,7 +190,7 @@ class DetectorRule(_Model):
 
 class MentionCountRule(DetectorRule):
     weight: NonNegativeInt = 40
-    threshold: PositiveInt = 5
+    threshold: PositiveInt = 3
 
 
 class MentionPatternRule(DetectorRule):
@@ -218,7 +218,7 @@ class TextPatternRule(PatternRule):
 
 
 class LinkPatternRule(PatternRule):
-    weight: NonNegativeInt = 25
+    weight: NonNegativeInt = 50
 
 
 class DisplayNamePatternRule(PatternRule):

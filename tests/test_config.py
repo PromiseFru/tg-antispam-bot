@@ -39,7 +39,6 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_shipped_rules_file_is_valid():
     parsed = load_rules_file(SHIPPED_RULES)
     rules = parse_chat_rules(parsed.defaults)
-    assert rules.detectors.mention_pattern.patterns == ["^dhm_"]
     assert rules.detectors.cas.enabled is False
 
 

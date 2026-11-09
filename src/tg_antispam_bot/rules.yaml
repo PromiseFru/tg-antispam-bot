@@ -40,14 +40,14 @@ defaults:
     mention_count:
       enabled: true
       weight: 40
-      threshold: 5
+      threshold: 3
     mention_pattern:
       enabled: true
       weight: 60
       min_matches: 2
-      description: "Mentions accounts named like @Dhm_..."
+      description: "Mentions several bot accounts"
       patterns:
-        - "^dhm_"
+        - "bot$"
     new_member:
       enabled: true
       weight: 20
@@ -65,11 +65,14 @@ defaults:
         - "earn\\s+\\$?\\d+\\s*(per|a)\\s+(day|hour)"
         - "guaranteed\\s+(profit|returns)"
         - "\\b(buy|purchase|sell)\\s+(your\\s+)?usdt\\b"
-        - "higher\\s+than\\s+the\\s+market\\s+(rate|price)"
+        - "(above|higher\\s+than)\\s+the\\s+market\\s+(rate|price)"
+        - "usdt\\s+purchases"
         - "phone\\s+numbers?\\s+for\\s+sms\\s+verification"
+        - "due\\s+to\\s+chinese\\s+regulations"
+        - "unable\\s+to\\s+(purchase|buy)\\s+(crypto|usdt)"
     link_pattern:
       enabled: true
-      weight: 25
+      weight: 50
       description: "Telegram invite links"
       patterns:
         - "t\\.me/(joinchat/|\\+)"

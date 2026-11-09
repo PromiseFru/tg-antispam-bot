@@ -292,7 +292,12 @@ async def settle(services: Any) -> None:
 
 _SHARED_DISPATCHER: list[Any] = []
 TEST_RULES: dict[str, Any] = {
-    "defaults": {"detectors": {"mention_pattern": {"patterns": ["^dhm_"]}}}
+    "defaults": {
+        "detectors": {
+            "mention_pattern": {"patterns": ["^dhm_"]},
+            "link_pattern": {"weight": 25},
+        }
+    }
 }
 
 

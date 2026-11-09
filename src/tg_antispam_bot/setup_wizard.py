@@ -103,6 +103,8 @@ async def wait_for_groups(
     wait_seconds: float,
 ) -> None:
     await bot.delete_webhook()
+    minutes = max(1, round(wait_seconds / 60))
+    print(f"Waiting up to {minutes} min. Press Ctrl+C to stop.")
     deadline = time.monotonic() + wait_seconds
     offset = None
     while (remaining := deadline - time.monotonic()) > 0:
@@ -121,9 +123,13 @@ async def wait_for_groups(
             chat_id, label = found
             if yes(ask(f"Found {label}. Allow it? [Y/n] "), True):
                 approve(chat_id)
+                print(f"Added {chat_id}.")
+            else:
+                print(f"Skipped {chat_id}.")
             if not yes(ask("Add another group? [y/N] "), False):
                 await bot.get_updates(offset=offset, timeout=0)
                 return
+            print("Waiting for the next group.")
             deadline = time.monotonic() + wait_seconds
     print("No group added in time. Run setup again to add one.")
 

@@ -493,6 +493,10 @@ class Engine:
             return
         bot = event.new_chat_member.user
         result = await self.executor.ban_member(chat_id, bot.id)
+        logger.info(
+            "removed bot added by a non-admin",
+            extra={"chat_id": chat_id, "bot_id": bot.id, "adder": adder.id},
+        )
         reason = f"bot added by a non-admin: {adder.full_name}"
         await self._record(chat_id, bot, reason, result, now, ACTION_BAN)
 

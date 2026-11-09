@@ -69,7 +69,7 @@ def setup(paths, make_bot):
 
 
 async def test_first_run_captures_the_group_and_writes_config(
-    paths, session, setup
+    paths, session, setup, capsys
 ):
     serve_updates(session, joined(GROUP_ID))
     previous = os.umask(0o022)
@@ -85,6 +85,7 @@ async def test_first_run_captures_the_group_and_writes_config(
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
     assert "mention_pattern" in rules.read_text()
     assert session.calls(GetUpdates)[-1].offset == 2
+    assert f"Added {GROUP_ID}" in capsys.readouterr().out
 
 
 async def test_only_new_groups_the_admin_approves_are_added(

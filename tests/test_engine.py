@@ -1227,9 +1227,11 @@ class TestOtherBots:
         assert session.calls(DeleteMessages) == []
 
     async def test_bot_added_by_a_member_is_removed(
-        self, engine, session, sink
+        self, engine, session, sink, caplog
     ):
+        caplog.set_level("INFO")
         await engine.handle_join(bot_added(MEMBER_ID))
+        assert "removed bot added by a non-admin" in caplog.messages
         assert session.calls(BanChatMember)[0].user_id == SPAM_BOT.id
         assert (sink.actions[0].user_id, sink.actions[0].action) == (
             SPAM_BOT.id,
@@ -1281,6 +1283,11 @@ class TestShippedScamPatterns:
             "We can buy your USDT, message me",
             "Paying 10% higher than the market rate",
             "We provide real US phone numbers for SMS verification",
+            "Due to Chinese regulations, please contact me",
+            "We are unable to purchase cryptocurrency directly",
+            "Paying a premium of 5% to 20% above the market rate",
+            "Due to policies restricting large-scale USDT purchases",
+            "join us t.me/+abcdefgh",
         ],
     )
     async def test_scam_from_a_longtime_member_is_deleted(
@@ -1292,6 +1299,27 @@ class TestShippedScamPatterns:
             make_message(text, user=make_user(SPAMMER_ID))
         )
         assert sink.actions[0].action == TIER_DELETE
+
+    async def test_new_member_summoning_ad_bots_is_banned(
+        self, engine, session
+    ):
+        await engine.handle_join(join_event(SPAMMER_ID))
+        await engine.handle_message(
+            make_message(
+                "@NsiMzbPd_Dbot @Nwip5OphNbot @nZRjY3R50bot",
+                user=make_user(SPAMMER_ID),
+            )
+        )
+        assert session.calls(BanChatMember)[0].user_id == SPAMMER_ID
+
+    async def test_new_member_tagging_two_friends_is_left_alone(
+        self, engine, sink
+    ):
+        await engine.handle_join(join_event(SPAMMER_ID))
+        await engine.handle_message(
+            make_message("Hi @maria_k and @tom_b", user=make_user(SPAMMER_ID))
+        )
+        assert sink.actions == []
 
     async def test_ordinary_crypto_talk_is_left_alone(self, engine, sink):
         await engine.handle_message(
