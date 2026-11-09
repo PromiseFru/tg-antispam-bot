@@ -1,0 +1,107 @@
+global:
+  admin_cache_ttl: 60s
+  notify_per_admin_interval: 1s
+  notify_global_per_second: 25
+  digest_edit_interval: 3s
+  cleanup_interval: 1h
+  joins_retention: 7d
+  recent_messages_retention: 2d
+  activity_retention: 90d
+  actions_retention: 90d
+  message_text_retention: 14d
+  message_preview_chars: 300
+
+defaults:
+  enabled: true
+  tiers:
+    delete: 50
+    delete_and_restrict: 70
+    delete_and_ban: 100
+  restrict_duration: 1d
+  ban_revoke_messages: false
+  remove_bots_added_by_members: true
+  escalation:
+    enabled: true
+    window: 10m
+    restrict_after: 2
+    ban_after: 3
+  raid_mode:
+    auto: true
+    duration: 30m
+    restrict_duration: 1h
+    manual_off_cooldown: 15m
+  notifications:
+    live_ephemeral_alerts: false
+    digest_threshold: 5
+    digest_window: 1m
+    digest_idle_timeout: 10m
+    log_limit: 5
+  detectors:
+    mention_count:
+      enabled: true
+      weight: 40
+      threshold: 5
+    mention_pattern:
+      enabled: true
+      weight: 60
+      min_matches: 2
+      description: "Mentions accounts named like @Dhm_..."
+      patterns:
+        - "^dhm_"
+    new_member:
+      enabled: true
+      weight: 20
+      window: 1d
+    early_messages:
+      enabled: true
+      weight: 10
+      first_n: 3
+    text_pattern:
+      enabled: true
+      weight: 50
+      description: "Known scam phrases"
+      patterns:
+        - "free\\s+crypto"
+        - "earn\\s+\\$?\\d+\\s*(per|a)\\s+(day|hour)"
+        - "guaranteed\\s+(profit|returns)"
+        - "\\b(buy|purchase|sell)\\s+(your\\s+)?usdt\\b"
+        - "higher\\s+than\\s+the\\s+market\\s+(rate|price)"
+        - "phone\\s+numbers?\\s+for\\s+sms\\s+verification"
+    link_pattern:
+      enabled: true
+      weight: 25
+      description: "Telegram invite links"
+      patterns:
+        - "t\\.me/(joinchat/|\\+)"
+        - "telegram\\.(me|dog)/(joinchat/|\\+)"
+    display_name_pattern:
+      enabled: true
+      weight: 35
+      description: "Airdrop, crypto and promo bot names"
+      patterns:
+        - "airdrop"
+        - "free\\s*crypto"
+        - "promo\\s*bot"
+    forwarded_from_channel:
+      enabled: true
+      weight: 15
+    edited_spam:
+      enabled: true
+      weight: 20
+    raid:
+      enabled: true
+      weight: 10
+      joins: 10
+      window: 1m
+    join_churn:
+      enabled: true
+      weight: 15
+      joins: 3
+      window: 10m
+    cas:
+      enabled: false
+      weight: 100
+      timeout: 2s
+      cache_ttl: 1h
+
+chats: {}

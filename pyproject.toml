@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-antispam-bot"
+version = "0.1.0"
+description = "Customizable Telegram anti-spam bot"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.31,<4",
+    "aiosqlite>=0.20",
+    "alembic>=1.13",
+    "cachetools>=5.5",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.7",
+    "python-dotenv>=1.0",
+    "python-json-logger>=3.1",
+    "pytimeparse2>=1.7",
+    "PyYAML>=6.0",
+    "regex>=2024.5.15",
+    "sqlalchemy[asyncio]>=2.1,<2.2",
+    "sqlcipher3-binary>=0.5.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.14,<0.18",
+    "types-cachetools",
+]
+
+[project.scripts]
+tg-antispam-bot = "tg_antispam_bot.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tg_antispam_bot = ["migrations/script.py.mako", "rules.yaml"]
+
+[tool.ruff]
+line-length = 80
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "ASYNC", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "S603", "ASYNC"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+stubPath = "typings"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["src"]
