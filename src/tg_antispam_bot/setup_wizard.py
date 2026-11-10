@@ -3,12 +3,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import getpass
-import os
 import secrets
 import sys
 import time
 from collections.abc import Callable
-from importlib import resources
 from pathlib import Path
 
 from aiogram import Bot
@@ -21,6 +19,8 @@ from aiogram.utils.token import TokenValidationError
 from dotenv import dotenv_values
 
 from .config import NO_CHATS, split_chat_ids
+from .files import write_atomic
+from .rules_sync import RULES_MODE, shipped_rules, write_snapshot
 
 GROUP_TYPES = {"group", "supergroup"}
 PRESENT_STATUSES = {"member", "administrator"}
@@ -37,23 +37,19 @@ def read_env(path: Path) -> dict[str, str]:
 
 
 def write_env(path: Path, values: dict[str, str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.unlink(missing_ok=True)
-    descriptor = os.open(
-        temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+    write_atomic(
+        path,
+        "".join(f"{key}={value}\n" for key, value in values.items()),
+        keep_mode=False,
     )
-    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-        handle.writelines(f"{key}={value}\n" for key, value in values.items())
-    os.replace(temporary, path)
 
 
 def write_default_rules(path: Path) -> bool:
     if path.exists():
         return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    default = resources.files("tg_antispam_bot").joinpath("rules.yaml")
-    path.write_text(default.read_text(encoding="utf-8"), encoding="utf-8")
+    shipped = shipped_rules()
+    write_atomic(path, shipped, RULES_MODE)
+    write_snapshot(path, shipped)
     return True
 
 

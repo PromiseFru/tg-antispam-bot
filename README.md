@@ -34,10 +34,10 @@ journalctl --user -u tg-antispam-bot -f
 In system mode, use `sudo` and drop `--user`.
 
 > [!TIP]
-> Run the installer again to upgrade or add a group. It keeps your `.env` and `rules.yaml`, so compare yours with the [shipped rules](src/tg_antispam_bot/rules.yaml) after upgrading.
+> Run the installer again to update or add a group. It keeps your `.env` and `rules.yaml`. Run [`rules sync`](#rules-sync-experimental) afterwards to add new shipped rules.
 
 > [!NOTE]
-> User services stop at logout. The installer enables lingering; if it can't, run `loginctl enable-linger $USER`.
+> User services stop at logout. The installer enables lingering. If it can't, run `sudo loginctl enable-linger $USER`.
 
 ## Environment
 
@@ -50,8 +50,13 @@ In system mode, use `sudo` and drop `--user`.
 | `RULES_PATH` | `rules.yaml` | |
 | `FALLBACK_LOG_CHAT_ID` | unset | chat for alerts from groups with no subscribed admins **[Experimental]** |
 | `LOG_LEVEL` | `INFO` | |
+| `AUTO_UPDATE` | `false` | update daily, see [Updates](#updates-experimental) **[Experimental]** |
+| `UPDATE_SOURCE` | `release` | `release`, `tag` or `branch` |
+| `UPDATE_BRANCH` | `main` | branch followed when `UPDATE_SOURCE=branch` |
+| `UPDATE_RULES` | `true` | add new shipped rules when updating |
+| `UPDATE_ROLLBACK` | `true` | restore the previous version if an update fails |
 
-Written by `tg-antispam-bot setup`. See [example.env](example.env).
+`tg-antispam-bot setup` writes the required variables, `DB_PATH` and `RULES_PATH`. Add the others by hand. See [example.env](example.env).
 
 > [!IMPORTANT]
 > Run one instance per token.
@@ -127,7 +132,7 @@ Repeat offences within `escalation.window` restrict the user at `restrict_after`
 
 A bot added by someone who isn't an admin is banned straight away, and admins get a card to undo it. Trusted bots are kept. Set `remove_bots_added_by_members: false` to allow it.
 
-A guest bot summoned by someone who isn't an admin is banned and its reply deleted, and admins get a card to undo it. Bots summoned by admins or trusted users are kept. Set `remove_guest_bots_summoned_by_members: false` to score their replies like other messages instead.
+A guest bot summoned by someone who isn't an admin is banned and its reply deleted, and admins get a card to undo it. Bots summoned by admins or trusted users are kept, and their replies aren't scored. Set `remove_guest_bots_summoned_by_members: false` to score their replies like other messages instead.
 
 Messages from other bots are scored like anyone else's, unless the bot is an admin.
 
@@ -145,6 +150,38 @@ A service reload applies changes to `defaults` and `chats`, and keeps the curren
 ### Group upgrades [Experimental]
 
 When a basic group is upgraded to a supergroup, the bot follows its new ID and logs a reminder to add it to `ALLOWED_CHAT_IDS`.
+
+## Updates [Experimental]
+
+The installer adds a daily timer that updates the bot when `AUTO_UPDATE=true`. To check or update by hand:
+
+```sh
+~/.local/share/tg-antispam-bot/venv/bin/tg-antispam-bot update --check
+~/.local/share/tg-antispam-bot/venv/bin/tg-antispam-bot update
+```
+
+In system mode, use `sudo` and `/opt/tg-antispam-bot/venv/bin/tg-antispam-bot`. `update` and `rules sync` read the installer's `.env` unless you pass `--env-file`.
+
+| `UPDATE_SOURCE` | Updates to |
+| --- | --- |
+| `release` | the latest GitHub release, if newer than the installed version |
+| `tag` | the newest `vX.Y.Z` tag, if newer than the installed version |
+| `branch` | the head of `UPDATE_BRANCH`, only if it fast-forwards from the installed commit |
+
+Versions come from git tags, and pre-release versions are skipped. An update stops the bot, installs the new version, adds new shipped rules if `UPDATE_RULES` is on, and starts the bot again. With `UPDATE_ROLLBACK`, it backs up the database and rules first. If a step then fails, it restores them and the previous version, and later updates skip that version.
+
+The updater keeps its backups and the versions it skips in `~/.local/state/tg-antispam-bot-update`, or `/var/lib/tg-antispam-bot-update` in system mode.
+
+### Rules sync [Experimental]
+
+```sh
+~/.local/share/tg-antispam-bot/venv/bin/tg-antispam-bot rules sync
+```
+
+Prints the shipped rules missing from your `rules.yaml` as a diff. Add `--apply` to write them. It only adds missing keys and patterns under `global` and `defaults`, never under `chats`. It never changes a value you set, keeps your comments, and doesn't bring back anything you removed since the last sync, which it tracks in `rules.yaml.shipped`. Reload the bot afterwards, or restart it if the diff changes `global`.
+
+> [!NOTE]
+> Without `rules.yaml.shipped`, for example when you wrote `rules.yaml` yourself or installed before rules sync existed, the first sync adds back every missing shipped rule, including ones you removed. Check its diff before applying. Updates skip rules sync until you've run `rules sync --apply` once by hand.
 
 ## Rules
 
@@ -200,11 +237,11 @@ python3 -m venv ~/.local/share/tg-antispam-bot/venv
     --rules-path ~/.config/tg-antispam-bot/rules.yaml
 ```
 
-Copy the user unit from [install.sh](install.sh) to `~/.config/systemd/user/tg-antispam-bot.service`, then:
+Copy the user unit, updater service and updater timer from [install.sh](install.sh) to `~/.config/systemd/user/` as `tg-antispam-bot.service`, `tg-antispam-bot-update.service` and `tg-antispam-bot-update.timer`, then:
 
 ```sh
-systemctl --user daemon-reload && systemctl --user enable --now tg-antispam-bot
-loginctl enable-linger $USER
+systemctl --user daemon-reload && systemctl --user enable --now tg-antispam-bot tg-antispam-bot-update.timer
+sudo loginctl enable-linger $USER
 ```
 
 > [!TIP]
@@ -218,23 +255,23 @@ loginctl enable-linger $USER
 User mode:
 
 ```sh
-systemctl --user disable --now tg-antispam-bot
-rm ~/.config/systemd/user/tg-antispam-bot.service
+systemctl --user disable --now tg-antispam-bot tg-antispam-bot-update.timer
+rm ~/.config/systemd/user/tg-antispam-bot.service ~/.config/systemd/user/tg-antispam-bot-update.*
 systemctl --user daemon-reload
-rm -rf ~/.local/share/tg-antispam-bot ~/.config/tg-antispam-bot
+rm -rf ~/.local/share/tg-antispam-bot ~/.config/tg-antispam-bot ~/.local/state/tg-antispam-bot-update
 ```
 
 System mode:
 
 ```sh
-sudo systemctl disable --now tg-antispam-bot
-sudo rm /etc/systemd/system/tg-antispam-bot.service
+sudo systemctl disable --now tg-antispam-bot tg-antispam-bot-update.timer
+sudo rm /etc/systemd/system/tg-antispam-bot.service /etc/systemd/system/tg-antispam-bot-update.*
 sudo systemctl daemon-reload
-sudo rm -rf /opt/tg-antispam-bot /etc/tg-antispam-bot /var/lib/tg-antispam-bot
+sudo rm -rf /opt/tg-antispam-bot /etc/tg-antispam-bot /var/lib/tg-antispam-bot /var/lib/tg-antispam-bot-update
 sudo userdel tg-antispam-bot
 ```
 
-Run `loginctl disable-linger` too if nothing else of yours needs to run after logout.
+Run `sudo loginctl disable-linger $USER` too if nothing else of yours needs to run after logout.
 
 ## Development
 

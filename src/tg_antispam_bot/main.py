@@ -17,6 +17,7 @@ from aiogram.types import (
 )
 from pydantic import ValidationError
 from pythonjsonlogger.json import JsonFormatter
+from sdnotify import SystemdNotifier
 
 from .access import AccessMiddleware
 from .config import ConfigError, RulesFile, Settings, load_rules_file
@@ -24,8 +25,10 @@ from .db import Database, DatabaseKeyError
 from .handlers import build_router
 from .pattern_check import check_file_patterns
 from .rules_store import RulesStore
+from .rules_sync import rules_cli
 from .services import Services, UpdateTracker, build_services
 from .setup_wizard import setup_cli
+from .updater import update_cli
 
 logger = logging.getLogger("tg_antispam_bot")
 
@@ -159,6 +162,7 @@ async def serve(
         logger.info(
             "bot started", extra={"username": me.username, "bot_id": me.id}
         )
+        SystemdNotifier().notify("READY=1")
         await dispatcher.start_polling(
             bot,
             allowed_updates=ALLOWED_UPDATES,
@@ -188,9 +192,15 @@ async def run(settings: Settings) -> None:
         logger.info("bot stopped")
 
 
+SUBCOMMANDS = {"setup": setup_cli, "rules": rules_cli, "update": update_cli}
+
+
 def cli() -> None:
-    if sys.argv[1:2] == ["setup"]:
-        setup_cli(sys.argv[2:])
+    args = sys.argv[1:]
+    subcommand = SUBCOMMANDS.get(args[0]) if args else None
+    if subcommand is not None:
+        configure_logging("INFO")
+        subcommand(sys.argv[2:])
         return
     try:
         settings = Settings()

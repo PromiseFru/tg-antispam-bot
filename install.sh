@@ -3,6 +3,7 @@ set -eu
 
 SOURCE="${TG_ANTISPAM_BOT_SOURCE:-git+https://github.com/PromiseFru/tg-antispam-bot}"
 SERVICE=tg-antispam-bot
+UPDATER=tg-antispam-bot-update
 
 fail() {
   echo "error: $*" >&2
@@ -81,6 +82,9 @@ Wants=network-online.target
 User=tg-antispam-bot
 Group=tg-antispam-bot
 EnvironmentFile=$ENV_FILE
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=5min
 ExecStart=$VENV/bin/tg-antispam-bot
 ExecReload=/bin/kill -HUP \$MAINPID
 StateDirectory=tg-antispam-bot
@@ -118,6 +122,9 @@ After=network-online.target
 
 [Service]
 EnvironmentFile=$ENV_FILE
+Type=notify
+NotifyAccess=main
+TimeoutStartSec=5min
 ExecStart=$VENV/bin/tg-antispam-bot
 ExecReload=/bin/kill -HUP \$MAINPID
 Restart=on-failure
@@ -130,13 +137,42 @@ WantedBy=default.target
 EOF
   fi
 
+  UNIT_DIR=$(dirname "$UNIT")
+  cat >"$UNIT_DIR/$UPDATER.service" <<EOF
+[Unit]
+Description=Telegram anti-spam bot updater
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=$ENV_FILE
+StateDirectory=$UPDATER
+StateDirectoryMode=0700
+ExecStart=$VENV/bin/tg-antispam-bot update --auto
+EOF
+  cat >"$UNIT_DIR/$UPDATER.timer" <<EOF
+[Unit]
+Description=Daily Telegram anti-spam bot update
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
   $CTL daemon-reload
   $CTL enable --now "$SERVICE"
+  $CTL enable --now "$UPDATER.timer"
   if [ "$MODE" = user ]; then
     loginctl enable-linger "$(id -un)" 2>/dev/null ||
-      echo "To keep the bot running after you log out: loginctl enable-linger $(id -un)"
+      echo "To keep the bot running after you log out: sudo loginctl enable-linger $(id -un)"
   fi
   echo "Running. Logs: $LOGS -u $SERVICE -f"
+  grep -qiE '^AUTO_UPDATE=["'"'"']?(true|1|yes|on)' "$ENV_FILE" ||
+    echo "Automatic updates are off. Set AUTO_UPDATE=true in $ENV_FILE to turn them on."
 }
 
 main "$@"

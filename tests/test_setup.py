@@ -126,8 +126,10 @@ async def test_rerun_keeps_secrets_settings_and_rules(paths, session, setup):
         f"BOT_TOKEN={FAKE_TOKEN}\nDB_ENCRYPTION_KEY={key}\n"
         f"ALLOWED_CHAT_IDS={GROUP_ID}\nLOG_LEVEL=DEBUG\n"
     )
+    env.chmod(0o644)
     rules.write_text("{}")
     values = await setup(answers("n"))
+    assert stat.S_IMODE(env.stat().st_mode) == 0o600
     assert values["DB_ENCRYPTION_KEY"] == key
     assert values["ALLOWED_CHAT_IDS"] == str(GROUP_ID)
     assert values["LOG_LEVEL"] == "DEBUG"

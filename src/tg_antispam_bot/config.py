@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import copy
 import logging
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import yaml
 from pydantic import (
@@ -73,7 +74,19 @@ class ConfigError(Exception):
     pass
 
 
-class DatabaseSettings(BaseSettings):
+SYSTEM_ENV_FILE = Path("/etc/tg-antispam-bot/tg-antispam-bot.env")
+
+
+def default_env_file() -> Path:
+    if os.geteuid() == 0:
+        installed = SYSTEM_ENV_FILE
+    else:
+        config = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
+        installed = Path(config) / "tg-antispam-bot" / ".env"
+    return installed if installed.exists() else Path(".env")
+
+
+class PathSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_ignore_empty=True,
@@ -81,8 +94,12 @@ class DatabaseSettings(BaseSettings):
         hide_input_in_errors=True,
     )
 
-    db_encryption_key: SecretStr = Field(default=...)
     db_path: str = "tg-antispam-bot.db"
+    rules_path: str = "rules.yaml"
+
+
+class DatabaseSettings(PathSettings):
+    db_encryption_key: SecretStr = Field(default=...)
 
     @field_validator("db_encryption_key")
     @classmethod
@@ -98,7 +115,6 @@ class DatabaseSettings(BaseSettings):
 class Settings(DatabaseSettings):
     bot_token: SecretStr = Field(default=...)
     allowed_chat_ids: Annotated[frozenset[int], NoDecode] = Field(default=...)
-    rules_path: str = "rules.yaml"
     fallback_log_chat_id: int | None = None
     log_level: str = "INFO"
 
@@ -136,6 +152,14 @@ class Settings(DatabaseSettings):
         except TokenValidationError as exc:
             raise ValueError("is not a valid bot token") from exc
         return value
+
+
+class UpdateSettings(PathSettings):
+    auto_update: bool = False
+    update_source: Literal["branch", "tag", "release"] = "release"
+    update_branch: str = "main"
+    update_rules: bool = True
+    update_rollback: bool = True
 
 
 class _Model(BaseModel):
@@ -393,8 +417,12 @@ def load_rules_file(path: str | Path) -> RulesFile:
         text = Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as exc:
         raise ConfigError(f"cannot read rules file {path}: {exc}") from exc
+    return parse_rules_text(text, str(path))
+
+
+def parse_rules_text(text: str, source: str) -> RulesFile:
     try:
         document = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise ConfigError(f"invalid YAML in {path}: {exc}") from exc
+        raise ConfigError(f"invalid YAML in {source}: {exc}") from exc
     return parse_rules_document(document)
