@@ -9,7 +9,7 @@ from typing import Any, Protocol
 from weakref import WeakValueDictionary
 
 from aiogram.enums import ContentType
-from aiogram.types import ChatMemberUpdated, Message, User
+from aiogram.types import Chat, ChatMemberUpdated, Message, User
 from cachetools import TTLCache
 
 from .actions import ActionExecutor, ApplyResult
@@ -169,16 +169,33 @@ def _escalated_tier(tier: str, offence: int, rules: ChatRules) -> str:
     return max(tier, minimum, key=TIER_RANK.__getitem__)
 
 
-def resolve_actor(message: Message) -> Actor | None:
-    sender_chat = message.sender_chat
-    if sender_chat is not None:
-        if sender_chat.id == message.chat.id:
+def _actor(user: User | None, chat: Chat | None, chat_id: int) -> Actor | None:
+    if chat is not None:
+        if chat.id == chat_id:
             return None
-        return Actor(sender_chat.id, sender_chat.title or str(sender_chat.id))
-    user = message.from_user
+        return Actor(chat.id, chat.title or str(chat.id))
     if user is None:
         return None
     return Actor(user.id, user.full_name)
+
+
+def resolve_actor(message: Message) -> Actor | None:
+    return _actor(message.from_user, message.sender_chat, message.chat.id)
+
+
+def is_guest_reply(message: Message) -> bool:
+    return (
+        message.guest_bot_caller_user is not None
+        or message.guest_bot_caller_chat is not None
+    )
+
+
+def resolve_guest_caller(message: Message) -> Actor | None:
+    return _actor(
+        message.guest_bot_caller_user,
+        message.guest_bot_caller_chat,
+        message.chat.id,
+    )
 
 
 def is_scannable(message: Message) -> bool:
@@ -286,9 +303,16 @@ class Engine:
         rules = ruleset.rules
         if not rules.enabled:
             return None
+        caller = None
         try:
             if await self.is_exempt(chat_id, actor.id):
                 return None
+            if rules.remove_guest_bots_summoned_by_members and is_guest_reply(
+                message
+            ):
+                caller = resolve_guest_caller(message)
+                if caller is None or await self.is_exempt(chat_id, caller.id):
+                    return None
         except AdminLookupError as exc:
             logger.warning(
                 "skipping message, admin list unavailable",
@@ -301,6 +325,9 @@ class Engine:
             return None
 
         now = self.now()
+        if caller is not None:
+            await self._remove_guest_bot(message, actor, caller, rules, now)
+            return None
         ctx = await self._build_context(message, actor, rules, is_edit, now)
         evaluation = await evaluate(ctx, ruleset.detectors, rules.tiers)
         tier = evaluation.tier
@@ -394,7 +421,6 @@ class Engine:
         now: int,
     ) -> None:
         chat_id = message.chat.id
-        stored_chars = self.rules.global_rules.message_preview_chars
         async with self._lock(chat_id, actor.id):
             reasons = evaluation.reasons
             offence = await self._offence_number(chat_id, actor.id, rules, now)
@@ -415,40 +441,63 @@ class Engine:
                         "tier": tier,
                     },
                 )
-            prior = self._active_sanction(chat_id, actor.id)
-            if prior and prior >= TIER_RANK[tier]:
-                await self.executor.delete_messages(
-                    chat_id, [message.message_id]
-                )
-                return
-            result = await self.executor.apply(
-                chat_id=chat_id,
-                user_id=actor.id,
-                tier=tier,
-                message_id=message.message_id,
-                restrict_seconds=rules.restrict_duration,
-                revoke_messages=rules.ban_revoke_messages,
-                now=now,
+            record = await self._sanction(
+                message,
+                actor,
+                rules,
+                tier,
+                evaluation.score,
+                reasons,
+                text,
+                now,
             )
-            if tier in (TIER_RESTRICT, TIER_BAN) and not result.errors:
-                self._sanctioned[(chat_id, actor.id)] = (
-                    TIER_RANK[tier],
-                    result.until_ts,
-                )
-            record = await self.db.insert_action(
-                chat_id=chat_id,
-                user_id=actor.id,
-                user_name=actor.name,
-                score=evaluation.score,
-                reasons=reasons,
-                message_text=text[:stored_chars],
-                action=tier,
-                until_ts=result.until_ts,
-                deleted_count=result.deleted_count,
-                errors=result.errors,
-                now=now,
+        if record is not None:
+            self.sink.submit(record)
+
+    async def _sanction(
+        self,
+        message: Message,
+        actor: Actor,
+        rules: ChatRules,
+        tier: str,
+        score: int,
+        reasons: list[str],
+        text: str,
+        now: int,
+    ) -> ActionRecord | None:
+        chat_id = message.chat.id
+        prior = self._active_sanction(chat_id, actor.id)
+        if prior and prior >= TIER_RANK[tier]:
+            await self.executor.delete_messages(chat_id, [message.message_id])
+            return None
+        stored_chars = self.rules.global_rules.message_preview_chars
+        result = await self.executor.apply(
+            chat_id=chat_id,
+            user_id=actor.id,
+            tier=tier,
+            message_id=message.message_id,
+            restrict_seconds=rules.restrict_duration,
+            revoke_messages=rules.ban_revoke_messages,
+            now=now,
+        )
+        if tier in (TIER_RESTRICT, TIER_BAN) and not result.errors:
+            self._sanctioned[(chat_id, actor.id)] = (
+                TIER_RANK[tier],
+                result.until_ts,
             )
-        self.sink.submit(record)
+        return await self.db.insert_action(
+            chat_id=chat_id,
+            user_id=actor.id,
+            user_name=actor.name,
+            score=score,
+            reasons=reasons,
+            message_text=text[:stored_chars],
+            action=tier,
+            until_ts=result.until_ts,
+            deleted_count=result.deleted_count,
+            errors=result.errors,
+            now=now,
+        )
 
     async def handle_join(self, event: ChatMemberUpdated) -> None:
         chat = event.chat
@@ -499,6 +548,28 @@ class Engine:
         )
         reason = f"bot added by a non-admin: {adder.full_name}"
         await self._record(chat_id, bot, reason, result, now, ACTION_BAN)
+
+    async def _remove_guest_bot(
+        self,
+        message: Message,
+        bot: Actor,
+        caller: Actor,
+        rules: ChatRules,
+        now: int,
+    ) -> None:
+        chat_id = message.chat.id
+        reason = f"guest bot summoned by a non-admin: {caller.name}"
+        text = MessageContext(message, bot.id, bot.name, now).scan_text
+        async with self._lock(chat_id, bot.id):
+            record = await self._sanction(
+                message, bot, rules, TIER_BAN, 0, [reason], text, now
+            )
+        logger.info(
+            "removed guest bot summoned by a non-admin",
+            extra={"chat_id": chat_id, "bot_id": bot.id, "caller": caller.id},
+        )
+        if record is not None:
+            self.sink.submit(record)
 
     async def _record(
         self,

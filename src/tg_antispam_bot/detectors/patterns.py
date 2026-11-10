@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import unicodedata
 
-from ..config import PatternRule
+from ..config import KeywordClusterRule, PatternRule
 from .base import (
     KIND_CONTEXT,
     DetectionResult,
@@ -62,3 +62,32 @@ class DisplayNamePatternDetector(_RegexDetector):
 
     def subject(self, ctx: MessageContext) -> str:
         return ctx.display_name
+
+
+class KeywordClusterDetector(_RegexDetector):
+    name = "keyword_cluster"
+    checks_content = True
+    description = "Text matches several blocked patterns"
+
+    def __init__(self, rule: KeywordClusterRule):
+        super().__init__(rule)
+        self.min_matches = rule.min_matches
+
+    def _matching(self, subject: str) -> list[str]:
+        return [
+            pattern.pattern
+            for pattern in self.patterns
+            if find_match([pattern], subject)
+        ]
+
+    async def check(self, ctx: MessageContext) -> DetectionResult | None:
+        subject = _normalize(self.subject(ctx))
+        if not subject or not self.patterns:
+            return None
+        matched = await asyncio.to_thread(self._matching, subject)
+        if len(matched) < self.min_matches:
+            return None
+        sample = ", ".join(f"/{pattern}/" for pattern in matched[:3])
+        return self.hit(
+            f"text matches {len(matched)} blocked patterns ({sample})"
+        )

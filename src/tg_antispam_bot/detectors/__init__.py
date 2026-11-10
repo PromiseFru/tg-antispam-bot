@@ -16,6 +16,7 @@ from .membership import (
 from .mentions import MentionCountDetector, MentionPatternDetector
 from .patterns import (
     DisplayNamePatternDetector,
+    KeywordClusterDetector,
     LinkPatternDetector,
     TextPatternDetector,
 )
@@ -28,6 +29,7 @@ DETECTOR_CLASSES: tuple[type[Detector[Any]], ...] = (
     TextPatternDetector,
     LinkPatternDetector,
     DisplayNamePatternDetector,
+    KeywordClusterDetector,
     ForwardedFromChannelDetector,
     EditedSpamDetector,
     RaidDetector,

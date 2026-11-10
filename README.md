@@ -96,6 +96,7 @@ Context detectors add points but can't trigger an action without a signal detect
 | `mention_pattern` | signal | at least `min_matches` mentioned usernames match | `patterns`, `min_matches` |
 | `text_pattern` | signal | the text matches | `patterns` |
 | `link_pattern` | signal | the text or a link matches | `patterns` |
+| `keyword_cluster` | signal | at least `min_matches` different patterns match the text | `patterns`, `min_matches` |
 | `forwarded_from_channel` | signal | a new member forwards a channel post **[Experimental]** | |
 | `cas` | signal | the sender is on the [CAS](https://cas.chat) list, off by default **[Experimental]** | `timeout`, `cache_ttl` |
 | `new_member` | context | the sender joined within `window` | `window` |
@@ -125,6 +126,8 @@ Repeat offences within `escalation.window` restrict the user at `restrict_after`
 ### Bots [Experimental]
 
 A bot added by someone who isn't an admin is banned straight away, and admins get a card to undo it. Trusted bots are kept. Set `remove_bots_added_by_members: false` to allow it.
+
+A guest bot summoned by someone who isn't an admin is banned and its reply deleted, and admins get a card to undo it. Bots summoned by admins or trusted users are kept. Set `remove_guest_bots_summoned_by_members: false` to score their replies like other messages instead.
 
 Messages from other bots are scored like anyone else's, unless the bot is an admin.
 

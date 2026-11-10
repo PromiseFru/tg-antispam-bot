@@ -15,6 +15,7 @@ from aiogram.exceptions import (
 from aiogram.methods import (
     BanChatMember,
     DeleteMessages,
+    GetChat,
     GetChatAdministrators,
     RestrictChatMember,
     UnbanChatMember,
@@ -46,6 +47,7 @@ from conftest import (
     SHIPPED_RULES,
     SPAMMER_ID,
     TEST_RULES,
+    USDT_BUYER_TEXT,
     bot_member_event,
     full_chat,
     join_event,
@@ -1220,6 +1222,84 @@ class TestOtherBots:
         await engine.handle_message(make_message(DHM_SPAM_TEXT, user=SPAM_BOT))
         assert session.calls(BanChatMember)[0].user_id == SPAM_BOT.id
 
+    async def test_guest_bot_summoned_by_member_is_banned(
+        self, engine, session, sink
+    ):
+        await engine.handle_message(
+            make_message(
+                "hello",
+                user=SPAM_BOT,
+                message_id=78,
+                guest_bot_caller_user=make_user(SPAMMER_ID),
+            )
+        )
+        assert session.calls(DeleteMessages)[0].message_ids == [78]
+        assert session.calls(BanChatMember)[0].user_id == SPAM_BOT.id
+        assert sink.actions[0].action == TIER_BAN
+        assert sink.actions[0].reasons == [
+            "guest bot summoned by a non-admin: Alice"
+        ]
+
+    async def test_banned_guest_bot_is_not_banned_again(self, engine, session):
+        for message_id in (78, 79):
+            await engine.handle_message(
+                make_message(
+                    "hello",
+                    user=SPAM_BOT,
+                    message_id=message_id,
+                    guest_bot_caller_user=make_user(SPAMMER_ID),
+                )
+            )
+        assert session.calls(DeleteMessages)[1].message_ids == [79]
+        assert len(session.calls(BanChatMember)) == 1
+
+    async def test_guest_bot_removal_can_be_turned_off(
+        self, engine, session, db, rules
+    ):
+        await db.set_setting(
+            CHAT_ID, "remove_guest_bots_summoned_by_members", False
+        )
+        rules.invalidate(CHAT_ID)
+        member = make_user(SPAMMER_ID)
+        await engine.handle_message(
+            make_message("hello", user=SPAM_BOT, guest_bot_caller_user=member)
+        )
+        assert session.calls(DeleteMessages) == []
+        await engine.handle_message(
+            make_message(
+                DHM_SPAM_TEXT, user=SPAM_BOT, guest_bot_caller_user=member
+            )
+        )
+        assert session.calls(BanChatMember)[0].user_id == SPAM_BOT.id
+
+    async def test_guest_bot_summoned_by_a_channel_is_banned(
+        self, engine, session
+    ):
+        session.on(GetChat, lambda method: full_chat())
+        channel = make_chat(-1009, "Promo", "channel")
+        await engine.handle_message(
+            make_message("hello", user=SPAM_BOT, guest_bot_caller_chat=channel)
+        )
+        assert session.calls(BanChatMember)[0].user_id == SPAM_BOT.id
+
+    @pytest.mark.parametrize(
+        "caller",
+        [
+            {"guest_bot_caller_user": make_user(ADMIN_ID)},
+            {"guest_bot_caller_user": make_user(MEMBER_ID)},
+            {"guest_bot_caller_chat": make_chat()},
+        ],
+        ids=["admin", "trusted", "anonymous_admin"],
+    )
+    async def test_guest_bot_summoned_by_admin_or_trusted_is_kept(
+        self, engine, session, db, caller
+    ):
+        await db.add_trusted(CHAT_ID, MEMBER_ID)
+        await engine.handle_message(
+            make_message(DHM_SPAM_TEXT, user=SPAM_BOT, **caller)
+        )
+        assert session.calls(DeleteMessages) == []
+
     async def test_admin_bots_are_exempt(self, engine, session, admins):
         session.set_admins(CHAT_ID, OWNER_ID, ADMIN_ID, SPAM_BOT.id)
         admins.invalidate(CHAT_ID)
@@ -1288,6 +1368,7 @@ class TestShippedScamPatterns:
             "Paying a premium of 5% to 20% above the market rate",
             "Due to policies restricting large-scale USDT purchases",
             "join us t.me/+abcdefgh",
+            USDT_BUYER_TEXT,
         ],
     )
     async def test_scam_from_a_longtime_member_is_deleted(
@@ -1321,11 +1402,17 @@ class TestShippedScamPatterns:
         )
         assert sink.actions == []
 
-    async def test_ordinary_crypto_talk_is_left_alone(self, engine, sink):
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Is USDT on Tron cheaper to send than on Ethereum?",
+            "What's the USDT exchange rate today?",
+            "Anyone know a good OTC desk? The best rates were on Kraken",
+            "Paid via UPI, the settlement took 2 days",
+        ],
+    )
+    async def test_ordinary_crypto_talk_is_left_alone(self, engine, sink, text):
         await engine.handle_message(
-            make_message(
-                "Is USDT on Tron cheaper to send than on Ethereum?",
-                user=make_user(SPAMMER_ID),
-            )
+            make_message(text, user=make_user(SPAMMER_ID))
         )
         assert sink.actions == []

@@ -225,6 +225,11 @@ class DisplayNamePatternRule(PatternRule):
     weight: NonNegativeInt = 35
 
 
+class KeywordClusterRule(PatternRule):
+    weight: NonNegativeInt = 50
+    min_matches: PositiveInt = 4
+
+
 class ForwardedFromChannelRule(DetectorRule):
     weight: NonNegativeInt = 15
 
@@ -260,6 +265,7 @@ class Detectors(_Model):
     text_pattern: TextPatternRule = TextPatternRule()
     link_pattern: LinkPatternRule = LinkPatternRule()
     display_name_pattern: DisplayNamePatternRule = DisplayNamePatternRule()
+    keyword_cluster: KeywordClusterRule = KeywordClusterRule()
     forwarded_from_channel: ForwardedFromChannelRule = (
         ForwardedFromChannelRule()
     )
@@ -310,6 +316,7 @@ class ChatRules(_Model):
     restrict_duration: RestrictDuration = 86400
     ban_revoke_messages: bool = False
     remove_bots_added_by_members: bool = True
+    remove_guest_bots_summoned_by_members: bool = True
     raid_mode: RaidRules = RaidRules()
     escalation: EscalationRules = EscalationRules()
     notifications: NotificationRules = NotificationRules()

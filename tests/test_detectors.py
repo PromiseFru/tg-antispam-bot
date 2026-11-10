@@ -45,6 +45,7 @@ from tg_antispam_bot.detectors.mentions import (
 )
 from tg_antispam_bot.detectors.patterns import (
     DisplayNamePatternDetector,
+    KeywordClusterDetector,
     LinkPatternDetector,
     TextPatternDetector,
 )
@@ -551,3 +552,32 @@ class TestMentionExtraction:
             now=NOW,
         )
         assert len(ctx.mentions) == 1
+
+
+class TestKeywordCluster:
+    detector = KeywordClusterDetector(
+        rule(
+            "keyword_cluster",
+            50,
+            patterns=["\\busdt\\b", "\\botc\\b", "make\\s+money", "sincere"],
+            min_matches=3,
+        )
+    )
+
+    async def test_min_matches_hits(self):
+        message = make_message("Make money with USDT on our OTC desk")
+        result = await self.detector.check(ctx_for(message))
+        assert result is not None
+        assert result.score == 50
+        assert result.reason == (
+            "text matches 3 blocked patterns "
+            "(/\\busdt\\b/, /\\botc\\b/, /make\\s+money/)"
+        )
+
+    async def test_below_min_matches_misses(self):
+        message = make_message("What is the USDT price on the OTC desk?")
+        assert await self.detector.check(ctx_for(message)) is None
+
+    async def test_repeated_keyword_counts_once(self):
+        message = make_message("usdt USDT usdt otc")
+        assert await self.detector.check(ctx_for(message)) is None

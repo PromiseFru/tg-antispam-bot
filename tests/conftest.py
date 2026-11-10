@@ -167,6 +167,17 @@ DHM_SPAM_TEXT = (
     + " marble ocean ticket"
 )
 FRIENDS_TEXT = "Hey @maria_k and @tom_b, are you coming tonight?"
+USDT_BUYER_TEXT = (
+    "💵💵❤️❤️ Want to make money ? Want a stable daily income ? ❤️❤️\n"
+    "🚀 Daily USDT Purchasing | High Yield & Stable 🚀\n"
+    "We are a joint venture with a strong presence in the OTC markets. "
+    "We purchase large volumes of USDT daily and provide stable "
+    "settlement services.\n"
+    "🎮 Gaming funds (UPI/IMPS only)\n"
+    "If you have USDT to sell, we offer long-term cooperation and stable "
+    "returns. If you do not have USDT, please do not waste time.\n"
+    "👉 @YLPAY586 @YLPAY586 Bot: @YLPAY586_bot"
+)
 
 
 def full_chat(chat_id: int = CHAT_ID, **kwargs: Any) -> ChatFullInfo:
